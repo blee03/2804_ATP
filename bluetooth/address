@@ -1,0 +1,15 @@
+2023-02-08 14:43:58,007 __main__ INFO: [Service] 00001800-0000-1000-8000-00805f9b34fb (Handle: 1): Generic Access Profile
+2023-02-08 14:43:58,036 __main__ INFO:   [Characteristic] 00002a00-0000-1000-8000-00805f9b34fb (Handle: 2): Device Name (read), Value: bytearray(b'DSD TECH')
+2023-02-08 14:43:58,065 __main__ INFO:   [Characteristic] 00002a01-0000-1000-8000-00805f9b34fb (Handle: 4): Appearance (read), Value: bytearray(b'\x00\x00')
+2023-02-08 14:43:58,097 __main__ INFO:   [Characteristic] 00002a02-0000-1000-8000-00805f9b34fb (Handle: 6): Peripheral Privacy Flag (read,write), Value: bytearray(b'\x00')
+2023-02-08 14:43:58,122 __main__ INFO:   [Characteristic] 00002a03-0000-1000-8000-00805f9b34fb (Handle: 8): Reconnection Address (read,write), Value: bytearray(b'\x00\x00\x00\x00\x00\x00')
+2023-02-08 14:43:58,154 __main__ INFO:   [Characteristic] 00002a04-0000-1000-8000-00805f9b34fb (Handle: 10): Peripheral Preferred Connection Parameters (read), Value: bytearray(b'P\x00\xa0\x00\x00\x00\xe8\x03')
+2023-02-08 14:43:58,154 __main__ INFO: [Service] 00001801-0000-1000-8000-00805f9b34fb (Handle: 12): Generic Attribute Profile
+2023-02-08 14:43:58,154 __main__ INFO:   [Characteristic] 00002a05-0000-1000-8000-00805f9b34fb (Handle: 13): Service Changed (indicate)
+2023-02-08 14:43:58,186 __main__ INFO:     [Descriptor] 00002902-0000-1000-8000-00805f9b34fb (Handle: 15): Client Characteristic Configuration, Value: bytearray(b'\x02\x00')
+2023-02-08 14:43:58,186 __main__ INFO: [Service] 0000ffe0-0000-1000-8000-00805f9b34fb (Handle: 16): Vendor specific
+2023-02-08 14:43:58,216 __main__ INFO:   [Characteristic] 0000ffe1-0000-1000-8000-00805f9b34fb (Handle: 17): DSD TECH (read,write-without-response,notify), Value: bytearray(b'\x94\xa9\xa8:\xb9?')
+2023-02-08 14:43:58,247 __main__ INFO:     [Descriptor] 00002902-0000-1000-8000-00805f9b34fb (Handle: 19): Client Characteristic Configuration, Value: bytearray(b'\x00\x00')
+2023-02-08 14:43:58,276 __main__ INFO:     [Descriptor] 00002901-0000-1000-8000-00805f9b34fb (Handle: 20): Characteristic User Description, Value: bytearray(b'DSD TECH')
+2023-02-08 14:43:58,276 __main__ INFO: disconnecting...
+2023-02-08 14:44:01,372 __main__ INFO: disconnected
