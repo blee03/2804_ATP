@@ -49,10 +49,11 @@ typedef struct
   int turn_count;
   double application_delay_ms;
   _tractorFSM_state state;
+  int intended_angle;
 } _Application;
 
-_Motor r_motor = {10, 9, 11, OFF, 0};
-_Motor l_motor = {8, 7, 6, OFF, 0};
+_Motor r_motor = {9, 10, 11, OFF, 0};
+_Motor l_motor = {8,7, 6, OFF, 0};
 
 _Button _b = {2, 0, 30, StableR};
 
@@ -81,10 +82,13 @@ void setup() {
   _ble.ss.begin(9600);
   Serial.println("Established connection with HM-10 at 9600");
 
+  pinMode(13, OUTPUT);
+  digitalWrite(13, HIGH);
+
   pinMode(_us.trig, OUTPUT);
   pinMode(_us.echo, INPUT);
 
-  app = {0, 25, START};
+  app = {0, 25, START, 1};
   
   Serial.println("Awaiting start...");
 }
@@ -106,7 +110,6 @@ void loop() {
 void Application_loop()
 {
   mpu.update();
-  
   switch (app.state)
   {
     case START:
@@ -122,8 +125,15 @@ void Application_loop()
     case DRIVE:
       // if ultrasonic sensor distance too close
       // transition to stop
-      // if detect turning point
-      // transition to turn
+
+      if(turn() == true) {
+        app.state = TURN;
+        Serial.println("turn");
+      }
+      else {
+        // Serial.println("continue driving");
+      }
+
       if (_b.isTapped || (_ble.msg == STOP_MSG))
       {
         app.state = STOP;
@@ -131,10 +141,27 @@ void Application_loop()
       }
       else
       {
-        motor_pd(0);
+        motor_pd(app.intended_angle);
       }
       break;
     case TURN:
+      if(app.turn_count==(1 || 2 || 5 || 6)){
+        motor_pd(app.intended_angle + 90);
+        app.intended_angle = app.intended_angle + 90;
+        app.turn_count = app.turn_count + 1;
+        Serial.println("right turn");
+        app.state = DRIVE;
+      }
+      else if(app.turn_count = (3 || 4)) {
+        motor_pd(app.intended_angle-90);
+        app.intended_angle = app.intended_angle - 90;
+        app.turn_count = app.turn_count + 1;
+        Serial.println("left turn");
+        app.state = DRIVE;
+      }
+      else {
+        app.state = STOP;
+      }
       break;
     case STOP:
       l_motor.dir = OFF;
@@ -272,8 +299,8 @@ void motor_pd(float th_goal)
 
   float th_err = (th_goal) - (current_heading - th_initial_offset);
   float PD = (K_P * th_err) + (K_D * (th_err - th_err_prev));
-  int motor_cmd_r = 220 + PD;
-  int motor_cmd_l = 220 - PD;
+  int motor_cmd_r = 220 - PD;
+  int motor_cmd_l = 220 + PD;
 
   Serial.print(th_err); Serial.print("\t");
   Serial.print(motor_cmd_r); Serial.print("\t");
@@ -336,4 +363,16 @@ void ble_data_tx(_BLE* ble)
   ble->ss.print("WHAT IS UP MY NEIGHBOR");
   ble->ss.print("MSG 2");
   ble->ss.print("MSG 3");
+}
+
+bool turn() {
+  static float lastReading = analogRead(0);
+  
+  float reading = analogRead(0);
+  if(reading>1000) {
+    return true; // on dark surface
+  }
+  else {
+    return false; // on light surface
+  }
 }
