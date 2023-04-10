@@ -1,4 +1,4 @@
-import asyncio
+import asyncio,thorpy
 from bleak import BleakClient
 
 # debug flag
@@ -16,15 +16,40 @@ def callback(sender: UUID, data: bytearray):
 # main
 async def main():
     async with BleakClient(ADDRESS) as client:
-        if(debug):
-            print(client.is_connected)
-            print(client.address)
-        
-        signal = b'1'
+        async def BLE_startTractor():
+            signal = b'1' 
+            await BleakClient.write_gatt_char(client, UUID, signal, True)
 
-        await BleakClient.write_gatt_char(client, UUID, signal, True)
-        print('on')
-        await BleakClient.start_notify(client, UUID, callback)   
+        async def BLE_stopTractor():
+            signal = b'2'
+            await BleakClient.write_gatt_char(client, UUID, signal, True)
+
+        application = thorpy.Application(size = (300, 300), caption = "G1 ATP Tractor GUI")
+
+        startButton = thorpy.make_button("Start Tractor", func = BLE_startTractor)
+        startButton.center() #center the element on the screen
+
+        stopButton = thorpy.make_button("Stop Tractor", func = BLE_startTractor)
+        stopButton.center() #center the element on the screen
+
+        background = thorpy.Background(color=(220, 220, 220), elements=[startButton, stopButton])
+
+        thorpy.store(background)
+
+        menu = thorpy.Menu(background) #create a menu for auto events handling
+        menu.play() #launch the menu
+
+        application.quit()
+
+        # if(debug):
+        #     print(client.is_connected)
+        #     print(client.address)
+        
+        # signal = b'1'
+
+        # await BleakClient.write_gatt_char(client, UUID, signal, True)
+        # print('on')
+        # await BleakClient.start_notify(client, UUID, callback)   
     # Device will disconnect when block exits.
 
     ...
