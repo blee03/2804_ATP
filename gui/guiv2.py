@@ -15,6 +15,7 @@ COLOR_RED = (211, 63, 73)
 COLOR_WHITE = (255, 255, 243)
 COLOR_BLACK = (38, 39, 48)
 
+# RENDER ALL BUTTONS AND ELEMENTS
 def renderButtons():
     # create start button
     pygame.draw.rect(screen, COLOR_GREEN, [20, 300, 350 , 100], border_radius=20) 
@@ -49,11 +50,12 @@ def callback(sender: UUID, data: bytearray):
     reportTurn = statisticFont.render('Number of Turns:  ' + parsedList[1] , True , COLOR_BLACK)
     screen.blit(reportTurn , (310 , 200))
 
+# REFRESH SCREEN
 def refresh_report():
     # create trip report location
     pygame.draw.rect(screen, COLOR_WHITE, [230, 120, 350 , 150], border_radius=20) 
 
-# REFRESH THE TRANSMISSION
+# ATTEMPT TO START TRACTOR
 @async_to_sync     
 async def BLE_start():
     refresh_report()
@@ -64,6 +66,7 @@ async def BLE_start():
     except Exception as e:
         print(e)
 
+# ATTEMPT TO STOP TRACTOR
 @async_to_sync     
 async def BLE_stop():
     refresh_report()
@@ -83,6 +86,7 @@ async def BLE_connect():
     except Exception as e:
         print(e)
 
+# ATTEMPT TO RETRIEVE TRIP REPORT
 @async_to_sync
 async def BLE_recieve():
     try:
@@ -94,7 +98,7 @@ async def BLE_recieve():
 
 # BEGIN MAIN
 
-# CREATE PYGAME SCREEN AND BUTTONS
+# CREATE PYGAME SCREEN
 pygame.init()
 screen = pygame.display.set_mode(((SCREEN_WIDTH, SCREEN_HEIGHT)))    
 pygame.display.set_caption('Tractor Graphical User Interface')
@@ -103,7 +107,7 @@ buttonFont = pygame.font.SysFont('none',40)
 reportFont = pygame.font.SysFont('none',22) 
 statisticFont = pygame.font.SysFont('none', 30)
 
-# ATTEMPT TO CONNECT BLUETOOTH
+# ATTEMPT TO CONNECT BLUETOOTH & RENDER BUTTONS
 renderButtons()
 BLE_connect()
 
@@ -120,6 +124,7 @@ while run:
         # check for button presses
         if event.type == pygame.MOUSEBUTTONDOWN:
             if 20 <= mouse[0] <= (20+350) and 300 <= mouse[1] <= 400:
+                print('START SIGNAL SENT')
                 BLE_start()
 
         if event.type == pygame.MOUSEBUTTONDOWN:
