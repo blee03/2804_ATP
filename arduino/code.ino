@@ -9,10 +9,9 @@
 typedef enum {OFF, CW, CCW} _motor_dir;
 typedef enum {START, DRIVE, TURN, STOP} _tractorFSM_state;
 typedef enum {StableP, PR, RP, StableR} _button_state;
-typedef enum {START_MSG, STOP_MSG, NONE} _ble_msg;
+typedef enum {NONE, START_MSG, STOP_MSG, PING_MSG} _ble_msg;
 
-typedef struct
-{
+typedef struct {
   int en_a;
   int en_b;
   int pwm_pin;
@@ -20,8 +19,7 @@ typedef struct
   int pwm;
 } _Motor;
 
-typedef struct
-{
+typedef struct {
   int pin;
   unsigned long lastDebounceTime;
   unsigned long debounceDelay;
@@ -30,22 +28,19 @@ typedef struct
   bool isTapped;
 } _Button;
 
-typedef struct
-{
+typedef struct {
   SoftwareSerial ss;
   _ble_msg msg;
 } _BLE;
 
-typedef struct
-{
+typedef struct {
   int trig;
   int echo;
   long duration;
   int distance;
 } _Ultrasonic;
 
-typedef struct
-{
+typedef struct {
   int turn_count;
   double application_delay_ms;
   _tractorFSM_state state;
@@ -64,10 +59,11 @@ _Ultrasonic _us = {13, 12, 0, 0};
 
 _Application app;
 
+long int runtime_start = 0;
+long int runtime_stop = 0;
 float th_initial_offset = 0;
 
 MPU6050 mpu(Wire);
-
 
 void setup() {
   Serial.begin(9600);
@@ -88,7 +84,7 @@ void setup() {
   pinMode(_us.trig, OUTPUT);
   pinMode(_us.echo, INPUT);
 
-  app = {0, 25, START, 1};
+  app = {1, 25, START, 0};
   
   Serial.println("Awaiting start...");
 }
@@ -96,13 +92,11 @@ void setup() {
 void loop() {
   // put your main code here, to run repeatedly:
   unsigned long tStart = millis();
-  
   Application_loop();
 
   pollForButton(&_b);
   pollForBLE(&_ble);
   // ultrasonicPing(&_us);
-  ble_data_tx(&_ble);
 
   while (millis() - tStart < app.application_delay_ms);
 }
@@ -110,14 +104,11 @@ void loop() {
 void Application_loop()
 {
   mpu.update();
-  switch (app.state)
-  {
+  switch (app.state) {
     case START:
-      if (_b.isTapped || (_ble.msg == START_MSG))
-      {
+      if (_b.isTapped || (_ble.msg == START_MSG)) {
         Serial.println("\tSTART -> DRIVE");
-        // Perform other startup tasks
-        
+        runtime_start = millis();
         th_initial_offset = mpu.getAngleZ();
         app.state = DRIVE;
       }
@@ -126,41 +117,40 @@ void Application_loop()
       // if ultrasonic sensor distance too close
       // transition to stop
 
-      if(turn() == true) {
-        app.state = TURN;
-        Serial.println("turn");
-      }
-      else {
-        // Serial.println("continue driving");
-      }
-
-      if (_b.isTapped || (_ble.msg == STOP_MSG))
-      {
+      if (_b.isTapped || (_ble.msg == STOP_MSG)) {
         app.state = STOP;
         Serial.println("\tDRIVE -> STOP");
+      } 
+      else if(turn()) {
+        app.state = TURN;
+        Serial.println("\tDRIVE -> TURN");
+
+        if (app.turn_count== 1 || app.turn_count == 2 || app.turn_count == 5 || app.turn_count == 6){
+          app.intended_angle += 90;
+          app.turn_count++;
+          Serial.println("Turning left...");
+        } else if (app.turn_count == 3 || app.turn_count == 4) {
+          app.intended_angle -= 90;
+          app.turn_count++;
+          Serial.println("Turning right...");
+        } else {
+          app.state = STOP;
+          Serial.println("\tTURN -> STOP");
+        }
       }
-      else
-      {
+      else {
         motor_pd(app.intended_angle);
       }
       break;
     case TURN:
-      if(app.turn_count==(1 || 2 || 5 || 6)){
-        motor_pd(app.intended_angle + 90);
-        app.intended_angle = app.intended_angle + 90;
-        app.turn_count = app.turn_count + 1;
-        Serial.println("right turn");
-        app.state = DRIVE;
-      }
-      else if(app.turn_count = (3 || 4)) {
-        motor_pd(app.intended_angle-90);
-        app.intended_angle = app.intended_angle - 90;
-        app.turn_count = app.turn_count + 1;
-        Serial.println("left turn");
-        app.state = DRIVE;
-      }
-      else {
+      if (_b.isTapped || (_ble.msg == STOP_MSG)) {
         app.state = STOP;
+        Serial.println("\tTURN -> STOP");
+      } else if (turnTofloor()) {
+        app.state = DRIVE;
+        Serial.println("\tTURN -> DRIVE");
+      } else {
+        motor_pd(app.intended_angle);
       }
       break;
     case STOP:
@@ -169,6 +159,9 @@ void Application_loop()
       drive_motor(&l_motor);
       drive_motor(&r_motor);
 
+      app.intended_angle = 0;
+      app.turn_count = 0;
+      runtime_stop = millis();
       Serial.println("Terminating...");
       Serial.println("\tSTOP -> START");
 
@@ -179,8 +172,7 @@ void Application_loop()
   }
 }
 
-void init_motor(_Motor* m)
-{
+void init_motor(_Motor* m) {
   pinMode(m->en_a, OUTPUT);
   pinMode(m->en_b, OUTPUT);
   pinMode(m->pwm_pin, OUTPUT);
@@ -189,8 +181,7 @@ void init_motor(_Motor* m)
   digitalWrite(m->en_b, LOW);
 }
 
-void init_mpu()
-{
+void init_mpu() {
   Wire.begin();
 
   byte status = mpu.begin();
@@ -204,8 +195,7 @@ void init_mpu()
   Serial.println("Done!\n");
 }
 
-void pollForButton(_Button* b)
-{
+void pollForButton(_Button* b) {
   int reading = digitalRead(b->pin);
 
   bool released = true;
@@ -214,46 +204,36 @@ void pollForButton(_Button* b)
   switch (b->state)
   {
     case StableR:
-      if (reading)
-      {
+      if (reading) {
         b->lastDebounceTime = millis();
         b->state = RP;
       }
       break;
     case StableP:
-      if (!reading)
-      {
+      if (!reading) {
         b->lastDebounceTime = millis();
         b->state = PR;
       }
       break;
     case RP:
-      if (!reading)
-      {
+      if (!reading) {
         b->state = StableR;
-      }
-      else if ((millis() - b->lastDebounceTime) > b->debounceDelay)
-      {
+      } else if ((millis() - b->lastDebounceTime) > b->debounceDelay) {
         b->state = StableP;
       }
       break;
     case PR:
-      if (reading)
-      {
+      if (reading) {
         b->state = StableP;
-      }
-      else if ((millis() - b->lastDebounceTime) > b->debounceDelay)
-      {
+      } else if ((millis() - b->lastDebounceTime) > b->debounceDelay) {
         b->state = StableR;
       }
       break;
   }
   
-  if ((b->lastState != b->state) && b->state == StableP)
-  {
+  if ((b->lastState != b->state) && b->state == StableP) {
     b->isTapped = true;
-  }
-  else
+  } else
     b->isTapped = false;
 }
 
@@ -273,6 +253,21 @@ void pollForBLE(_BLE* ble)
         Serial.println("Ending Loop!");
         ble->msg = STOP_MSG;
         break;
+      case 3:
+        ble->msg = PING_MSG;
+        delay(50);
+        if(app.state==DRIVE)
+        {
+          ble->ss.print("tractor in motion");
+        }
+        else
+        {
+          ble->ss.print((float) (runtime_stop-runtime_start) / 1000);
+          ble->ss.print("\t");
+          ble->ss.print(app.turn_count);
+        }
+        
+        break;    
       default:
         ble->msg = NONE;
     }
@@ -302,32 +297,24 @@ void motor_pd(float th_goal)
   int motor_cmd_r = 220 - PD;
   int motor_cmd_l = 220 + PD;
 
-  Serial.print(th_err); Serial.print("\t");
-  Serial.print(motor_cmd_r); Serial.print("\t");
-  Serial.println(motor_cmd_l);
+  // Serial.print(th_err); Serial.print("\t");
+  // Serial.print(motor_cmd_r); Serial.print("\t");
+  // Serial.println(motor_cmd_l);
 
   th_err_prev = th_err;
 
-  if (motor_cmd_r < 0)
-  {
+  if (motor_cmd_r < 0) {
     r_motor.dir = CW;
-  }
-  else if (motor_cmd_r > 0)
-  {
+  } else if (motor_cmd_r > 0) {
     r_motor.dir = CCW;
-  }
-  else
+  } else
     r_motor.dir = OFF;
 
-  if (motor_cmd_l < 0)
-  {
+  if (motor_cmd_l < 0) {
     l_motor.dir = CW;
-  }
-  else if (motor_cmd_l > 0)
-  {
+  } else if (motor_cmd_l > 0) {
     l_motor.dir = CCW;
-  }
-  else
+  } else
     l_motor.dir = OFF;
   
   r_motor.pwm = abs(motor_cmd_r);
@@ -360,19 +347,63 @@ void drive_motor(_Motor* m)
 
 void ble_data_tx(_BLE* ble)
 {
-  ble->ss.print("WHAT IS UP MY NEIGHBOR");
-  ble->ss.print("MSG 2");
-  ble->ss.print("MSG 3");
+  // Print motors and direction
+  // print LR pwm
+  // print LR motor direction
+  // ble->ss.print(r_motor.dir);ble->ss.print("\t");
+  // ble->ss.print(r_motor.pwm);ble->ss.print("\t");
+  // ble->ss.print(l_motor.dir);ble->ss.print("\t");
+  // ble->ss.print(l_motor.pwm);ble->ss.print("\t");
+
+  // // Print imu acc_x,acc_y,acc_z, w_x,w_y,w_z, orientation
+  // ble->ss.print(mpu.getAccX());ble->ss.print("\t");
+  // ble->ss.print(mpu.getAccY());ble->ss.print("\t");
+  // ble->ss.print(mpu.getAccZ());ble->ss.print("\t");
+  // ble->ss.print(mpu.getGyroX());ble->ss.print("\t");
+  // ble->ss.print(mpu.getGyroY());ble->ss.print("\t");
+  // ble->ss.print(mpu.getGyroZ());ble->ss.print("\t");
+
+  // ble->ss.print(mpu.getAngleZ());ble->ss.print("\t");
+  
+  // // Print object detection status 
+  // // not implemented yet
+
+  // // Print FSM state
+  // // print turn count and intended angle
+  ble->ss.print(app.turn_count);ble->ss.print("\t");
+  // ble->ss.print(app.intended_angle);ble->ss.print("\t");
+  // ble->ss.print(app.state);ble->ss.print("\t");
 }
 
 bool turn() {
-  static float lastReading = analogRead(0);
-  
+  static float lastReading = 0;
+
+  bool retVal = false;
+
   float reading = analogRead(0);
-  if(reading>1000) {
-    return true; // on dark surface
+  if((reading - lastReading) > 100) {
+    retVal = true; // on dark surface
+    Serial.println("Detected turn!");
+  } else {
+    retVal = false; // on light surface
   }
-  else {
-    return false; // on light surface
-  }
+
+  lastReading = reading;
+  return retVal;
+}
+
+bool turnTofloor() {
+  static float lastReading = analogRead(0);
+
+  bool retVal = false;
+
+  float reading = analogRead(0);
+  if ((lastReading - reading) > 100) {
+    Serial.println("Moving from tape to floor!");
+    retVal = true;
+  } else
+    retVal = false;
+
+  lastReading = reading;
+  return retVal;
 }
