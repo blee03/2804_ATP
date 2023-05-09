@@ -4,7 +4,7 @@
 
 #define TIMESTEP_MS 1
 #define K_P 40
-#define K_D 0
+#define K_D 20
 
 typedef enum {OFF, CW, CCW} _motor_dir;
 typedef enum {START, DRIVE, TURN, STOP} _tractorFSM_state;
@@ -42,6 +42,7 @@ typedef struct {
 
 typedef struct {
   int turn_count;
+  int old_turn_count;
   double application_delay_ms;
   _tractorFSM_state state;
   int intended_angle;
@@ -75,6 +76,8 @@ void setup() {
 
   pinMode(_b.pin, INPUT);
 
+  pinMode(13, INPUT);
+
   _ble.ss.begin(9600);
   Serial.println("Established connection with HM-10 at 9600");
 
@@ -84,7 +87,7 @@ void setup() {
   pinMode(_us.trig, OUTPUT);
   pinMode(_us.echo, INPUT);
 
-  app = {1, 25, START, 0};
+  app = {1, 0, 25, START, 0};
   
   Serial.println("Awaiting start...");
 }
@@ -117,7 +120,7 @@ void Application_loop()
       // if ultrasonic sensor distance too close
       // transition to stop
 
-      if (_b.isTapped || (_ble.msg == STOP_MSG)) {
+      if (_b.isTapped || (_ble.msg == STOP_MSG) || digitalRead(13)) {
         app.state = STOP;
         Serial.println("\tDRIVE -> STOP");
       } 
@@ -143,7 +146,7 @@ void Application_loop()
       }
       break;
     case TURN:
-      if (_b.isTapped || (_ble.msg == STOP_MSG)) {
+      if (_b.isTapped || (_ble.msg == STOP_MSG) || digitalRead(13)) {
         app.state = STOP;
         Serial.println("\tTURN -> STOP");
       } else if (turnTofloor()) {
@@ -160,7 +163,8 @@ void Application_loop()
       drive_motor(&r_motor);
 
       app.intended_angle = 0;
-      app.turn_count = 0;
+      app.old_turn_count = app.turn_count;
+      app.turn_count = 1;
       runtime_stop = millis();
       Serial.println("Terminating...");
       Serial.println("\tSTOP -> START");
@@ -264,7 +268,7 @@ void pollForBLE(_BLE* ble)
         {
           ble->ss.print((float) (runtime_stop-runtime_start) / 1000);
           ble->ss.print("\t");
-          ble->ss.print(app.turn_count);
+          ble->ss.print(app.old_turn_count);
         }
         
         break;    
